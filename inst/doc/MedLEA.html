@@ -1,0 +1,2628 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+
+
+<title>MedLEA</title>
+
+<script>(function() {
+  // If window.HTMLWidgets is already defined, then use it; otherwise create a
+  // new object. This allows preceding code to set options that affect the
+  // initialization process (though none currently exist).
+  window.HTMLWidgets = window.HTMLWidgets || {};
+
+  // See if we're running in a viewer pane. If not, we're in a web browser.
+  var viewerMode = window.HTMLWidgets.viewerMode =
+      /\bviewer_pane=1\b/.test(window.location);
+
+  // See if we're running in Shiny mode. If not, it's a static document.
+  // Note that static widgets can appear in both Shiny and static modes, but
+  // obviously, Shiny widgets can only appear in Shiny apps/documents.
+  var shinyMode = window.HTMLWidgets.shinyMode =
+      typeof(window.Shiny) !== "undefined" && !!window.Shiny.outputBindings;
+
+  // We can't count on jQuery being available, so we implement our own
+  // version if necessary.
+  function querySelectorAll(scope, selector) {
+    if (typeof(jQuery) !== "undefined" && scope instanceof jQuery) {
+      return scope.find(selector);
+    }
+    if (scope.querySelectorAll) {
+      return scope.querySelectorAll(selector);
+    }
+  }
+
+  function asArray(value) {
+    if (value === null)
+      return [];
+    if ($.isArray(value))
+      return value;
+    return [value];
+  }
+
+  // Implement jQuery's extend
+  function extend(target /*, ... */) {
+    if (arguments.length == 1) {
+      return target;
+    }
+    for (var i = 1; i < arguments.length; i++) {
+      var source = arguments[i];
+      for (var prop in source) {
+        if (source.hasOwnProperty(prop)) {
+          target[prop] = source[prop];
+        }
+      }
+    }
+    return target;
+  }
+
+  // IE8 doesn't support Array.forEach.
+  function forEach(values, callback, thisArg) {
+    if (values.forEach) {
+      values.forEach(callback, thisArg);
+    } else {
+      for (var i = 0; i < values.length; i++) {
+        callback.call(thisArg, values[i], i, values);
+      }
+    }
+  }
+
+  // Replaces the specified method with the return value of funcSource.
+  //
+  // Note that funcSource should not BE the new method, it should be a function
+  // that RETURNS the new method. funcSource receives a single argument that is
+  // the overridden method, it can be called from the new method. The overridden
+  // method can be called like a regular function, it has the target permanently
+  // bound to it so "this" will work correctly.
+  function overrideMethod(target, methodName, funcSource) {
+    var superFunc = target[methodName] || function() {};
+    var superFuncBound = function() {
+      return superFunc.apply(target, arguments);
+    };
+    target[methodName] = funcSource(superFuncBound);
+  }
+
+  // Add a method to delegator that, when invoked, calls
+  // delegatee.methodName. If there is no such method on
+  // the delegatee, but there was one on delegator before
+  // delegateMethod was called, then the original version
+  // is invoked instead.
+  // For example:
+  //
+  // var a = {
+  //   method1: function() { console.log('a1'); }
+  //   method2: function() { console.log('a2'); }
+  // };
+  // var b = {
+  //   method1: function() { console.log('b1'); }
+  // };
+  // delegateMethod(a, b, "method1");
+  // delegateMethod(a, b, "method2");
+  // a.method1();
+  // a.method2();
+  //
+  // The output would be "b1", "a2".
+  function delegateMethod(delegator, delegatee, methodName) {
+    var inherited = delegator[methodName];
+    delegator[methodName] = function() {
+      var target = delegatee;
+      var method = delegatee[methodName];
+
+      // The method doesn't exist on the delegatee. Instead,
+      // call the method on the delegator, if it exists.
+      if (!method) {
+        target = delegator;
+        method = inherited;
+      }
+
+      if (method) {
+        return method.apply(target, arguments);
+      }
+    };
+  }
+
+  // Implement a vague facsimilie of jQuery's data method
+  function elementData(el, name, value) {
+    if (arguments.length == 2) {
+      return el["htmlwidget_data_" + name];
+    } else if (arguments.length == 3) {
+      el["htmlwidget_data_" + name] = value;
+      return el;
+    } else {
+      throw new Error("Wrong number of arguments for elementData: " +
+        arguments.length);
+    }
+  }
+
+  // http://stackoverflow.com/questions/3446170/escape-string-for-use-in-javascript-regex
+  function escapeRegExp(str) {
+    return str.replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, "\\$&");
+  }
+
+  function hasClass(el, className) {
+    var re = new RegExp("\\b" + escapeRegExp(className) + "\\b");
+    return re.test(el.className);
+  }
+
+  // elements - array (or array-like object) of HTML elements
+  // className - class name to test for
+  // include - if true, only return elements with given className;
+  //   if false, only return elements *without* given className
+  function filterByClass(elements, className, include) {
+    var results = [];
+    for (var i = 0; i < elements.length; i++) {
+      if (hasClass(elements[i], className) == include)
+        results.push(elements[i]);
+    }
+    return results;
+  }
+
+  function on(obj, eventName, func) {
+    if (obj.addEventListener) {
+      obj.addEventListener(eventName, func, false);
+    } else if (obj.attachEvent) {
+      obj.attachEvent(eventName, func);
+    }
+  }
+
+  function off(obj, eventName, func) {
+    if (obj.removeEventListener)
+      obj.removeEventListener(eventName, func, false);
+    else if (obj.detachEvent) {
+      obj.detachEvent(eventName, func);
+    }
+  }
+
+  // Translate array of values to top/right/bottom/left, as usual with
+  // the "padding" CSS property
+  // https://developer.mozilla.org/en-US/docs/Web/CSS/padding
+  function unpackPadding(value) {
+    if (typeof(value) === "number")
+      value = [value];
+    if (value.length === 1) {
+      return {top: value[0], right: value[0], bottom: value[0], left: value[0]};
+    }
+    if (value.length === 2) {
+      return {top: value[0], right: value[1], bottom: value[0], left: value[1]};
+    }
+    if (value.length === 3) {
+      return {top: value[0], right: value[1], bottom: value[2], left: value[1]};
+    }
+    if (value.length === 4) {
+      return {top: value[0], right: value[1], bottom: value[2], left: value[3]};
+    }
+  }
+
+  // Convert an unpacked padding object to a CSS value
+  function paddingToCss(paddingObj) {
+    return paddingObj.top + "px " + paddingObj.right + "px " + paddingObj.bottom + "px " + paddingObj.left + "px";
+  }
+
+  // Makes a number suitable for CSS
+  function px(x) {
+    if (typeof(x) === "number")
+      return x + "px";
+    else
+      return x;
+  }
+
+  // Retrieves runtime widget sizing information for an element.
+  // The return value is either null, or an object with fill, padding,
+  // defaultWidth, defaultHeight fields.
+  function sizingPolicy(el) {
+    var sizingEl = document.querySelector("script[data-for='" + el.id + "'][type='application/htmlwidget-sizing']");
+    if (!sizingEl)
+      return null;
+    var sp = JSON.parse(sizingEl.textContent || sizingEl.text || "{}");
+    if (viewerMode) {
+      return sp.viewer;
+    } else {
+      return sp.browser;
+    }
+  }
+
+  // @param tasks Array of strings (or falsy value, in which case no-op).
+  //   Each element must be a valid JavaScript expression that yields a
+  //   function. Or, can be an array of objects with "code" and "data"
+  //   properties; in this case, the "code" property should be a string
+  //   of JS that's an expr that yields a function, and "data" should be
+  //   an object that will be added as an additional argument when that
+  //   function is called.
+  // @param target The object that will be "this" for each function
+  //   execution.
+  // @param args Array of arguments to be passed to the functions. (The
+  //   same arguments will be passed to all functions.)
+  function evalAndRun(tasks, target, args) {
+    if (tasks) {
+      forEach(tasks, function(task) {
+        var theseArgs = args;
+        if (typeof(task) === "object") {
+          theseArgs = theseArgs.concat([task.data]);
+          task = task.code;
+        }
+        var taskFunc = tryEval(task);
+        if (typeof(taskFunc) !== "function") {
+          throw new Error("Task must be a function! Source:\n" + task);
+        }
+        taskFunc.apply(target, theseArgs);
+      });
+    }
+  }
+
+  // Attempt eval() both with and without enclosing in parentheses.
+  // Note that enclosing coerces a function declaration into
+  // an expression that eval() can parse
+  // (otherwise, a SyntaxError is thrown)
+  function tryEval(code) {
+    var result = null;
+    try {
+      result = eval("(" + code + ")");
+    } catch(error) {
+      if (!error instanceof SyntaxError) {
+        throw error;
+      }
+      try {
+        result = eval(code);
+      } catch(e) {
+        if (e instanceof SyntaxError) {
+          throw error;
+        } else {
+          throw e;
+        }
+      }
+    }
+    return result;
+  }
+
+  function initSizing(el) {
+    var sizing = sizingPolicy(el);
+    if (!sizing)
+      return;
+
+    var cel = document.getElementById("htmlwidget_container");
+    if (!cel)
+      return;
+
+    if (typeof(sizing.padding) !== "undefined") {
+      document.body.style.margin = "0";
+      document.body.style.padding = paddingToCss(unpackPadding(sizing.padding));
+    }
+
+    if (sizing.fill) {
+      document.body.style.overflow = "hidden";
+      document.body.style.width = "100%";
+      document.body.style.height = "100%";
+      document.documentElement.style.width = "100%";
+      document.documentElement.style.height = "100%";
+      if (cel) {
+        cel.style.position = "absolute";
+        var pad = unpackPadding(sizing.padding);
+        cel.style.top = pad.top + "px";
+        cel.style.right = pad.right + "px";
+        cel.style.bottom = pad.bottom + "px";
+        cel.style.left = pad.left + "px";
+        el.style.width = "100%";
+        el.style.height = "100%";
+      }
+
+      return {
+        getWidth: function() { return cel.offsetWidth; },
+        getHeight: function() { return cel.offsetHeight; }
+      };
+
+    } else {
+      el.style.width = px(sizing.width);
+      el.style.height = px(sizing.height);
+
+      return {
+        getWidth: function() { return el.offsetWidth; },
+        getHeight: function() { return el.offsetHeight; }
+      };
+    }
+  }
+
+  // Default implementations for methods
+  var defaults = {
+    find: function(scope) {
+      return querySelectorAll(scope, "." + this.name);
+    },
+    renderError: function(el, err) {
+      var $el = $(el);
+
+      this.clearError(el);
+
+      // Add all these error classes, as Shiny does
+      var errClass = "shiny-output-error";
+      if (err.type !== null) {
+        // use the classes of the error condition as CSS class names
+        errClass = errClass + " " + $.map(asArray(err.type), function(type) {
+          return errClass + "-" + type;
+        }).join(" ");
+      }
+      errClass = errClass + " htmlwidgets-error";
+
+      // Is el inline or block? If inline or inline-block, just display:none it
+      // and add an inline error.
+      var display = $el.css("display");
+      $el.data("restore-display-mode", display);
+
+      if (display === "inline" || display === "inline-block") {
+        $el.hide();
+        if (err.message !== "") {
+          var errorSpan = $("<span>").addClass(errClass);
+          errorSpan.text(err.message);
+          $el.after(errorSpan);
+        }
+      } else if (display === "block") {
+        // If block, add an error just after the el, set visibility:none on the
+        // el, and position the error to be on top of the el.
+        // Mark it with a unique ID and CSS class so we can remove it later.
+        $el.css("visibility", "hidden");
+        if (err.message !== "") {
+          var errorDiv = $("<div>").addClass(errClass).css("position", "absolute")
+            .css("top", el.offsetTop)
+            .css("left", el.offsetLeft)
+            // setting width can push out the page size, forcing otherwise
+            // unnecessary scrollbars to appear and making it impossible for
+            // the element to shrink; so use max-width instead
+            .css("maxWidth", el.offsetWidth)
+            .css("height", el.offsetHeight);
+          errorDiv.text(err.message);
+          $el.after(errorDiv);
+
+          // Really dumb way to keep the size/position of the error in sync with
+          // the parent element as the window is resized or whatever.
+          var intId = setInterval(function() {
+            if (!errorDiv[0].parentElement) {
+              clearInterval(intId);
+              return;
+            }
+            errorDiv
+              .css("top", el.offsetTop)
+              .css("left", el.offsetLeft)
+              .css("maxWidth", el.offsetWidth)
+              .css("height", el.offsetHeight);
+          }, 500);
+        }
+      }
+    },
+    clearError: function(el) {
+      var $el = $(el);
+      var display = $el.data("restore-display-mode");
+      $el.data("restore-display-mode", null);
+
+      if (display === "inline" || display === "inline-block") {
+        if (display)
+          $el.css("display", display);
+        $(el.nextSibling).filter(".htmlwidgets-error").remove();
+      } else if (display === "block"){
+        $el.css("visibility", "inherit");
+        $(el.nextSibling).filter(".htmlwidgets-error").remove();
+      }
+    },
+    sizing: {}
+  };
+
+  // Called by widget bindings to register a new type of widget. The definition
+  // object can contain the following properties:
+  // - name (required) - A string indicating the binding name, which will be
+  //   used by default as the CSS classname to look for.
+  // - initialize (optional) - A function(el) that will be called once per
+  //   widget element; if a value is returned, it will be passed as the third
+  //   value to renderValue.
+  // - renderValue (required) - A function(el, data, initValue) that will be
+  //   called with data. Static contexts will cause this to be called once per
+  //   element; Shiny apps will cause this to be called multiple times per
+  //   element, as the data changes.
+  window.HTMLWidgets.widget = function(definition) {
+    if (!definition.name) {
+      throw new Error("Widget must have a name");
+    }
+    if (!definition.type) {
+      throw new Error("Widget must have a type");
+    }
+    // Currently we only support output widgets
+    if (definition.type !== "output") {
+      throw new Error("Unrecognized widget type '" + definition.type + "'");
+    }
+    // TODO: Verify that .name is a valid CSS classname
+
+    // Support new-style instance-bound definitions. Old-style class-bound
+    // definitions have one widget "object" per widget per type/class of
+    // widget; the renderValue and resize methods on such widget objects
+    // take el and instance arguments, because the widget object can't
+    // store them. New-style instance-bound definitions have one widget
+    // object per widget instance; the definition that's passed in doesn't
+    // provide renderValue or resize methods at all, just the single method
+    //   factory(el, width, height)
+    // which returns an object that has renderValue(x) and resize(w, h).
+    // This enables a far more natural programming style for the widget
+    // author, who can store per-instance state using either OO-style
+    // instance fields or functional-style closure variables (I guess this
+    // is in contrast to what can only be called C-style pseudo-OO which is
+    // what we required before).
+    if (definition.factory) {
+      definition = createLegacyDefinitionAdapter(definition);
+    }
+
+    if (!definition.renderValue) {
+      throw new Error("Widget must have a renderValue function");
+    }
+
+    // For static rendering (non-Shiny), use a simple widget registration
+    // scheme. We also use this scheme for Shiny apps/documents that also
+    // contain static widgets.
+    window.HTMLWidgets.widgets = window.HTMLWidgets.widgets || [];
+    // Merge defaults into the definition; don't mutate the original definition.
+    var staticBinding = extend({}, defaults, definition);
+    overrideMethod(staticBinding, "find", function(superfunc) {
+      return function(scope) {
+        var results = superfunc(scope);
+        // Filter out Shiny outputs, we only want the static kind
+        return filterByClass(results, "html-widget-output", false);
+      };
+    });
+    window.HTMLWidgets.widgets.push(staticBinding);
+
+    if (shinyMode) {
+      // Shiny is running. Register the definition with an output binding.
+      // The definition itself will not be the output binding, instead
+      // we will make an output binding object that delegates to the
+      // definition. This is because we foolishly used the same method
+      // name (renderValue) for htmlwidgets definition and Shiny bindings
+      // but they actually have quite different semantics (the Shiny
+      // bindings receive data that includes lots of metadata that it
+      // strips off before calling htmlwidgets renderValue). We can't
+      // just ignore the difference because in some widgets it's helpful
+      // to call this.renderValue() from inside of resize(), and if
+      // we're not delegating, then that call will go to the Shiny
+      // version instead of the htmlwidgets version.
+
+      // Merge defaults with definition, without mutating either.
+      var bindingDef = extend({}, defaults, definition);
+
+      // This object will be our actual Shiny binding.
+      var shinyBinding = new Shiny.OutputBinding();
+
+      // With a few exceptions, we'll want to simply use the bindingDef's
+      // version of methods if they are available, otherwise fall back to
+      // Shiny's defaults. NOTE: If Shiny's output bindings gain additional
+      // methods in the future, and we want them to be overrideable by
+      // HTMLWidget binding definitions, then we'll need to add them to this
+      // list.
+      delegateMethod(shinyBinding, bindingDef, "getId");
+      delegateMethod(shinyBinding, bindingDef, "onValueChange");
+      delegateMethod(shinyBinding, bindingDef, "onValueError");
+      delegateMethod(shinyBinding, bindingDef, "renderError");
+      delegateMethod(shinyBinding, bindingDef, "clearError");
+      delegateMethod(shinyBinding, bindingDef, "showProgress");
+
+      // The find, renderValue, and resize are handled differently, because we
+      // want to actually decorate the behavior of the bindingDef methods.
+
+      shinyBinding.find = function(scope) {
+        var results = bindingDef.find(scope);
+
+        // Only return elements that are Shiny outputs, not static ones
+        var dynamicResults = results.filter(".html-widget-output");
+
+        // It's possible that whatever caused Shiny to think there might be
+        // new dynamic outputs, also caused there to be new static outputs.
+        // Since there might be lots of different htmlwidgets bindings, we
+        // schedule execution for later--no need to staticRender multiple
+        // times.
+        if (results.length !== dynamicResults.length)
+          scheduleStaticRender();
+
+        return dynamicResults;
+      };
+
+      // Wrap renderValue to handle initialization, which unfortunately isn't
+      // supported natively by Shiny at the time of this writing.
+
+      shinyBinding.renderValue = function(el, data) {
+        Shiny.renderDependencies(data.deps);
+        // Resolve strings marked as javascript literals to objects
+        if (!(data.evals instanceof Array)) data.evals = [data.evals];
+        for (var i = 0; data.evals && i < data.evals.length; i++) {
+          window.HTMLWidgets.evaluateStringMember(data.x, data.evals[i]);
+        }
+        if (!bindingDef.renderOnNullValue) {
+          if (data.x === null) {
+            el.style.visibility = "hidden";
+            return;
+          } else {
+            el.style.visibility = "inherit";
+          }
+        }
+        if (!elementData(el, "initialized")) {
+          initSizing(el);
+
+          elementData(el, "initialized", true);
+          if (bindingDef.initialize) {
+            var result = bindingDef.initialize(el, el.offsetWidth,
+              el.offsetHeight);
+            elementData(el, "init_result", result);
+          }
+        }
+        bindingDef.renderValue(el, data.x, elementData(el, "init_result"));
+        evalAndRun(data.jsHooks.render, elementData(el, "init_result"), [el, data.x]);
+      };
+
+      // Only override resize if bindingDef implements it
+      if (bindingDef.resize) {
+        shinyBinding.resize = function(el, width, height) {
+          // Shiny can call resize before initialize/renderValue have been
+          // called, which doesn't make sense for widgets.
+          if (elementData(el, "initialized")) {
+            bindingDef.resize(el, width, height, elementData(el, "init_result"));
+          }
+        };
+      }
+
+      Shiny.outputBindings.register(shinyBinding, bindingDef.name);
+    }
+  };
+
+  var scheduleStaticRenderTimerId = null;
+  function scheduleStaticRender() {
+    if (!scheduleStaticRenderTimerId) {
+      scheduleStaticRenderTimerId = setTimeout(function() {
+        scheduleStaticRenderTimerId = null;
+        window.HTMLWidgets.staticRender();
+      }, 1);
+    }
+  }
+
+  // Render static widgets after the document finishes loading
+  // Statically render all elements that are of this widget's class
+  window.HTMLWidgets.staticRender = function() {
+    var bindings = window.HTMLWidgets.widgets || [];
+    forEach(bindings, function(binding) {
+      var matches = binding.find(document.documentElement);
+      forEach(matches, function(el) {
+        var sizeObj = initSizing(el, binding);
+
+        if (hasClass(el, "html-widget-static-bound"))
+          return;
+        el.className = el.className + " html-widget-static-bound";
+
+        var initResult;
+        if (binding.initialize) {
+          initResult = binding.initialize(el,
+            sizeObj ? sizeObj.getWidth() : el.offsetWidth,
+            sizeObj ? sizeObj.getHeight() : el.offsetHeight
+          );
+          elementData(el, "init_result", initResult);
+        }
+
+        if (binding.resize) {
+          var lastSize = {
+            w: sizeObj ? sizeObj.getWidth() : el.offsetWidth,
+            h: sizeObj ? sizeObj.getHeight() : el.offsetHeight
+          };
+          var resizeHandler = function(e) {
+            var size = {
+              w: sizeObj ? sizeObj.getWidth() : el.offsetWidth,
+              h: sizeObj ? sizeObj.getHeight() : el.offsetHeight
+            };
+            if (size.w === 0 && size.h === 0)
+              return;
+            if (size.w === lastSize.w && size.h === lastSize.h)
+              return;
+            lastSize = size;
+            binding.resize(el, size.w, size.h, initResult);
+          };
+
+          on(window, "resize", resizeHandler);
+
+          // This is needed for cases where we're running in a Shiny
+          // app, but the widget itself is not a Shiny output, but
+          // rather a simple static widget. One example of this is
+          // an rmarkdown document that has runtime:shiny and widget
+          // that isn't in a render function. Shiny only knows to
+          // call resize handlers for Shiny outputs, not for static
+          // widgets, so we do it ourselves.
+          if (window.jQuery) {
+            window.jQuery(document).on(
+              "shown.htmlwidgets shown.bs.tab.htmlwidgets shown.bs.collapse.htmlwidgets",
+              resizeHandler
+            );
+            window.jQuery(document).on(
+              "hidden.htmlwidgets hidden.bs.tab.htmlwidgets hidden.bs.collapse.htmlwidgets",
+              resizeHandler
+            );
+          }
+
+          // This is needed for the specific case of ioslides, which
+          // flips slides between display:none and display:block.
+          // Ideally we would not have to have ioslide-specific code
+          // here, but rather have ioslides raise a generic event,
+          // but the rmarkdown package just went to CRAN so the
+          // window to getting that fixed may be long.
+          if (window.addEventListener) {
+            // It's OK to limit this to window.addEventListener
+            // browsers because ioslides itself only supports
+            // such browsers.
+            on(document, "slideenter", resizeHandler);
+            on(document, "slideleave", resizeHandler);
+          }
+        }
+
+        var scriptData = document.querySelector("script[data-for='" + el.id + "'][type='application/json']");
+        if (scriptData) {
+          var data = JSON.parse(scriptData.textContent || scriptData.text);
+          // Resolve strings marked as javascript literals to objects
+          if (!(data.evals instanceof Array)) data.evals = [data.evals];
+          for (var k = 0; data.evals && k < data.evals.length; k++) {
+            window.HTMLWidgets.evaluateStringMember(data.x, data.evals[k]);
+          }
+          binding.renderValue(el, data.x, initResult);
+          evalAndRun(data.jsHooks.render, initResult, [el, data.x]);
+        }
+      });
+    });
+
+    invokePostRenderHandlers();
+  }
+
+
+  function has_jQuery3() {
+    if (!window.jQuery) {
+      return false;
+    }
+    var $version = window.jQuery.fn.jquery;
+    var $major_version = parseInt($version.split(".")[0]);
+    return $major_version >= 3;
+  }
+
+  /*
+  / Shiny 1.4 bumped jQuery from 1.x to 3.x which means jQuery's
+  / on-ready handler (i.e., $(fn)) is now asyncronous (i.e., it now
+  / really means $(setTimeout(fn)).
+  / https://jquery.com/upgrade-guide/3.0/#breaking-change-document-ready-handlers-are-now-asynchronous
+  /
+  / Since Shiny uses $() to schedule initShiny, shiny>=1.4 calls initShiny
+  / one tick later than it did before, which means staticRender() is
+  / called renderValue() earlier than (advanced) widget authors might be expecting.
+  / https://github.com/rstudio/shiny/issues/2630
+  /
+  / For a concrete example, leaflet has some methods (e.g., updateBounds)
+  / which reference Shiny methods registered in initShiny (e.g., setInputValue).
+  / Since leaflet is privy to this life-cycle, it knows to use setTimeout() to
+  / delay execution of those methods (until Shiny methods are ready)
+  / https://github.com/rstudio/leaflet/blob/18ec981/javascript/src/index.js#L266-L268
+  /
+  / Ideally widget authors wouldn't need to use this setTimeout() hack that
+  / leaflet uses to call Shiny methods on a staticRender(). In the long run,
+  / the logic initShiny should be broken up so that method registration happens
+  / right away, but binding happens later.
+  */
+  function maybeStaticRenderLater() {
+    if (shinyMode && has_jQuery3()) {
+      window.jQuery(window.HTMLWidgets.staticRender);
+    } else {
+      window.HTMLWidgets.staticRender();
+    }
+  }
+
+  if (document.addEventListener) {
+    document.addEventListener("DOMContentLoaded", function() {
+      document.removeEventListener("DOMContentLoaded", arguments.callee, false);
+      maybeStaticRenderLater();
+    }, false);
+  } else if (document.attachEvent) {
+    document.attachEvent("onreadystatechange", function() {
+      if (document.readyState === "complete") {
+        document.detachEvent("onreadystatechange", arguments.callee);
+        maybeStaticRenderLater();
+      }
+    });
+  }
+
+
+  window.HTMLWidgets.getAttachmentUrl = function(depname, key) {
+    // If no key, default to the first item
+    if (typeof(key) === "undefined")
+      key = 1;
+
+    var link = document.getElementById(depname + "-" + key + "-attachment");
+    if (!link) {
+      throw new Error("Attachment " + depname + "/" + key + " not found in document");
+    }
+    return link.getAttribute("href");
+  };
+
+  window.HTMLWidgets.dataframeToD3 = function(df) {
+    var names = [];
+    var length;
+    for (var name in df) {
+        if (df.hasOwnProperty(name))
+            names.push(name);
+        if (typeof(df[name]) !== "object" || typeof(df[name].length) === "undefined") {
+            throw new Error("All fields must be arrays");
+        } else if (typeof(length) !== "undefined" && length !== df[name].length) {
+            throw new Error("All fields must be arrays of the same length");
+        }
+        length = df[name].length;
+    }
+    var results = [];
+    var item;
+    for (var row = 0; row < length; row++) {
+        item = {};
+        for (var col = 0; col < names.length; col++) {
+            item[names[col]] = df[names[col]][row];
+        }
+        results.push(item);
+    }
+    return results;
+  };
+
+  window.HTMLWidgets.transposeArray2D = function(array) {
+      if (array.length === 0) return array;
+      var newArray = array[0].map(function(col, i) {
+          return array.map(function(row) {
+              return row[i]
+          })
+      });
+      return newArray;
+  };
+  // Split value at splitChar, but allow splitChar to be escaped
+  // using escapeChar. Any other characters escaped by escapeChar
+  // will be included as usual (including escapeChar itself).
+  function splitWithEscape(value, splitChar, escapeChar) {
+    var results = [];
+    var escapeMode = false;
+    var currentResult = "";
+    for (var pos = 0; pos < value.length; pos++) {
+      if (!escapeMode) {
+        if (value[pos] === splitChar) {
+          results.push(currentResult);
+          currentResult = "";
+        } else if (value[pos] === escapeChar) {
+          escapeMode = true;
+        } else {
+          currentResult += value[pos];
+        }
+      } else {
+        currentResult += value[pos];
+        escapeMode = false;
+      }
+    }
+    if (currentResult !== "") {
+      results.push(currentResult);
+    }
+    return results;
+  }
+  // Function authored by Yihui/JJ Allaire
+  window.HTMLWidgets.evaluateStringMember = function(o, member) {
+    var parts = splitWithEscape(member, '.', '\\');
+    for (var i = 0, l = parts.length; i < l; i++) {
+      var part = parts[i];
+      // part may be a character or 'numeric' member name
+      if (o !== null && typeof o === "object" && part in o) {
+        if (i == (l - 1)) { // if we are at the end of the line then evalulate
+          if (typeof o[part] === "string")
+            o[part] = tryEval(o[part]);
+        } else { // otherwise continue to next embedded object
+          o = o[part];
+        }
+      }
+    }
+  };
+
+  // Retrieve the HTMLWidget instance (i.e. the return value of an
+  // HTMLWidget binding's initialize() or factory() function)
+  // associated with an element, or null if none.
+  window.HTMLWidgets.getInstance = function(el) {
+    return elementData(el, "init_result");
+  };
+
+  // Finds the first element in the scope that matches the selector,
+  // and returns the HTMLWidget instance (i.e. the return value of
+  // an HTMLWidget binding's initialize() or factory() function)
+  // associated with that element, if any. If no element matches the
+  // selector, or the first matching element has no HTMLWidget
+  // instance associated with it, then null is returned.
+  //
+  // The scope argument is optional, and defaults to window.document.
+  window.HTMLWidgets.find = function(scope, selector) {
+    if (arguments.length == 1) {
+      selector = scope;
+      scope = document;
+    }
+
+    var el = scope.querySelector(selector);
+    if (el === null) {
+      return null;
+    } else {
+      return window.HTMLWidgets.getInstance(el);
+    }
+  };
+
+  // Finds all elements in the scope that match the selector, and
+  // returns the HTMLWidget instances (i.e. the return values of
+  // an HTMLWidget binding's initialize() or factory() function)
+  // associated with the elements, in an array. If elements that
+  // match the selector don't have an associated HTMLWidget
+  // instance, the returned array will contain nulls.
+  //
+  // The scope argument is optional, and defaults to window.document.
+  window.HTMLWidgets.findAll = function(scope, selector) {
+    if (arguments.length == 1) {
+      selector = scope;
+      scope = document;
+    }
+
+    var nodes = scope.querySelectorAll(selector);
+    var results = [];
+    for (var i = 0; i < nodes.length; i++) {
+      results.push(window.HTMLWidgets.getInstance(nodes[i]));
+    }
+    return results;
+  };
+
+  var postRenderHandlers = [];
+  function invokePostRenderHandlers() {
+    while (postRenderHandlers.length) {
+      var handler = postRenderHandlers.shift();
+      if (handler) {
+        handler();
+      }
+    }
+  }
+
+  // Register the given callback function to be invoked after the
+  // next time static widgets are rendered.
+  window.HTMLWidgets.addPostRenderHandler = function(callback) {
+    postRenderHandlers.push(callback);
+  };
+
+  // Takes a new-style instance-bound definition, and returns an
+  // old-style class-bound definition. This saves us from having
+  // to rewrite all the logic in this file to accomodate both
+  // types of definitions.
+  function createLegacyDefinitionAdapter(defn) {
+    var result = {
+      name: defn.name,
+      type: defn.type,
+      initialize: function(el, width, height) {
+        return defn.factory(el, width, height);
+      },
+      renderValue: function(el, x, instance) {
+        return instance.renderValue(x);
+      },
+      resize: function(el, width, height, instance) {
+        return instance.resize(width, height);
+      }
+    };
+
+    if (defn.find)
+      result.find = defn.find;
+    if (defn.renderError)
+      result.renderError = defn.renderError;
+    if (defn.clearError)
+      result.clearError = defn.clearError;
+
+    return result;
+  }
+})();
+
+</script>
+<style type="text/css">#wcLabel {position: absolute;border: 2px solid #fff;box-shadow: 0 0 4px 0 #008;padding: 2px;pointer-events: none; }#wcSpan {position: absolute;top: 100%;left: 0;background-color: rgba(255, 255, 255, 0.8);color: #333;margin-top: 6px;padding: 0 0.5em;border-radius: 0.5em;white-space: nowrap; }</style>
+<script>/*!
+ * wordcloud2.js
+ * http://timdream.org/wordcloud2.js/
+ *
+ * Copyright 2011 - 2013 Tim Chien
+ * Released under the MIT license
+ */
+
+'use strict';
+
+// setImmediate
+if (!window.setImmediate) {
+  window.setImmediate = (function setupSetImmediate() {
+    return window.msSetImmediate ||
+    window.webkitSetImmediate ||
+    window.mozSetImmediate ||
+    window.oSetImmediate ||
+    (function setupSetZeroTimeout() {
+      if (!window.postMessage || !window.addEventListener) {
+        return null;
+      }
+
+      var callbacks = [undefined];
+      var message = 'zero-timeout-message';
+
+      // Like setTimeout, but only takes a function argument.  There's
+      // no time argument (always zero) and no arguments (you have to
+      // use a closure).
+      var setZeroTimeout = function setZeroTimeout(callback) {
+        var id = callbacks.length;
+        callbacks.push(callback);
+        window.postMessage(message + id.toString(36), '*');
+
+        return id;
+      };
+
+      window.addEventListener('message', function setZeroTimeoutMessage(evt) {
+        // Skipping checking event source, retarded IE confused this window
+        // object with another in the presence of iframe
+        if (typeof evt.data !== 'string' ||
+            evt.data.substr(0, message.length) !== message/* ||
+            evt.source !== window */) {
+          return;
+        }
+
+        evt.stopImmediatePropagation();
+
+        var id = parseInt(evt.data.substr(message.length), 36);
+        if (!callbacks[id]) {
+          return;
+        }
+
+        callbacks[id]();
+        callbacks[id] = undefined;
+      }, true);
+
+      /* specify clearImmediate() here since we need the scope */
+      window.clearImmediate = function clearZeroTimeout(id) {
+        if (!callbacks[id]) {
+          return;
+        }
+
+        callbacks[id] = undefined;
+      };
+
+      return setZeroTimeout;
+    })() ||
+    // fallback
+    function setImmediateFallback(fn) {
+      window.setTimeout(fn, 0);
+    };
+  })();
+}
+
+if (!window.clearImmediate) {
+  window.clearImmediate = (function setupClearImmediate() {
+    return window.msClearImmediate ||
+    window.webkitClearImmediate ||
+    window.mozClearImmediate ||
+    window.oClearImmediate ||
+    // "clearZeroTimeout" is implement on the previous block ||
+    // fallback
+    function clearImmediateFallback(timer) {
+      window.clearTimeout(timer);
+    };
+  })();
+}
+
+(function(global) {
+
+  // Check if WordCloud can run on this browser
+  var isSupported = (function isSupported() {
+    var canvas = document.createElement('canvas');
+    if (!canvas || !canvas.getContext) {
+      return false;
+    }
+
+    var ctx = canvas.getContext('2d');
+    if (!ctx.getImageData) {
+      return false;
+    }
+    if (!ctx.fillText) {
+      return false;
+    }
+
+    if (!Array.prototype.some) {
+      return false;
+    }
+    if (!Array.prototype.push) {
+      return false;
+    }
+
+    return true;
+  }());
+
+  // Find out if the browser impose minium font size by
+  // drawing small texts on a canvas and measure it's width.
+  var minFontSize = (function getMinFontSize() {
+    if (!isSupported) {
+      return;
+    }
+
+    var ctx = document.createElement('canvas').getContext('2d');
+
+    // start from 20
+    var size = 20;
+
+    // two sizes to measure
+    var hanWidth, mWidth;
+
+    while (size) {
+      ctx.font = size.toString(10) + 'px sans-serif';
+      if ((ctx.measureText('\uFF37').width === hanWidth) &&
+          (ctx.measureText('m').width) === mWidth) {
+        return (size + 1);
+      }
+
+      hanWidth = ctx.measureText('\uFF37').width;
+      mWidth = ctx.measureText('m').width;
+
+      size--;
+    }
+
+    return 0;
+  })();
+
+  // Based on http://jsfromhell.com/array/shuffle
+  var shuffleArray = function shuffleArray(arr) {
+    for (var j, x, i = arr.length; i;
+      j = Math.floor(Math.random() * i),
+      x = arr[--i], arr[i] = arr[j],
+      arr[j] = x) {}
+    return arr;
+  };
+
+  var WordCloud = function WordCloud(elements, options) {
+    if (!isSupported) {
+      return;
+    }
+
+    if (!Array.isArray(elements)) {
+      elements = [elements];
+    }
+
+    elements.forEach(function(el, i) {
+      if (typeof el === 'string') {
+        elements[i] = document.getElementById(el);
+        if (!elements[i]) {
+          throw 'The element id specified is not found.';
+        }
+      } else if (!el.tagName && !el.appendChild) {
+        throw 'You must pass valid HTML elements, or ID of the element.';
+      }
+    });
+
+    /* Default values to be overwritten by options object */
+    var settings = {
+      list: [],
+      fontFamily: '"Trebuchet MS", "Heiti TC", "微軟正黑體", ' +
+                  '"Arial Unicode MS", "Droid Fallback Sans", sans-serif',
+      fontWeight: 'normal',
+      color: 'random-dark',
+      minSize: 0, // 0 to disable
+      weightFactor: 1,
+      clearCanvas: true,
+      backgroundColor: '#fff',  // opaque white = rgba(255, 255, 255, 1)
+
+      gridSize: 8,
+      origin: null,
+
+      drawMask: false,
+      maskColor: 'rgba(255,0,0,0.3)',
+      maskGapWidth: 0.3,
+
+      wait: 0,
+      abortThreshold: 0, // disabled
+      abort: function noop() {},
+
+      minRotation: - Math.PI / 2,
+      maxRotation: Math.PI / 2,
+
+      shuffle: true,
+      rotateRatio: 0.1,
+
+      shape: 'circle',
+      ellipticity: 0.65,
+
+      classes: null,
+
+      hover: null,
+      click: null
+    };
+
+    if (options) {
+      for (var key in options) {
+        if (key in settings) {
+          settings[key] = options[key];
+        }
+      }
+    }
+
+    /* Convert weightFactor into a function */
+    if (typeof settings.weightFactor !== 'function') {
+      var factor = settings.weightFactor;
+      settings.weightFactor = function weightFactor(pt) {
+        return pt * factor; //in px
+      };
+    }
+
+    /* Convert shape into a function */
+    if (typeof settings.shape !== 'function') {
+      switch (settings.shape) {
+        case 'circle':
+        /* falls through */
+        default:
+          // 'circle' is the default and a shortcut in the code loop.
+          settings.shape = 'circle';
+          break;
+
+        case 'cardioid':
+          settings.shape = function shapeCardioid(theta) {
+            return 1 - Math.sin(theta);
+          };
+          break;
+
+        /*
+
+        To work out an X-gon, one has to calculate "m",
+        where 1/(cos(2*PI/X)+m*sin(2*PI/X)) = 1/(cos(0)+m*sin(0))
+        http://www.wolframalpha.com/input/?i=1%2F%28cos%282*PI%2FX%29%2Bm*sin%28
+        2*PI%2FX%29%29+%3D+1%2F%28cos%280%29%2Bm*sin%280%29%29
+
+        Copy the solution into polar equation r = 1/(cos(t') + m*sin(t'))
+        where t' equals to mod(t, 2PI/X);
+
+        */
+
+        case 'diamond':
+        case 'square':
+          // http://www.wolframalpha.com/input/?i=plot+r+%3D+1%2F%28cos%28mod+
+          // %28t%2C+PI%2F2%29%29%2Bsin%28mod+%28t%2C+PI%2F2%29%29%29%2C+t+%3D
+          // +0+..+2*PI
+          settings.shape = function shapeSquare(theta) {
+            var thetaPrime = theta % (2 * Math.PI / 4);
+            return 1 / (Math.cos(thetaPrime) + Math.sin(thetaPrime));
+          };
+          break;
+
+        case 'triangle-forward':
+          // http://www.wolframalpha.com/input/?i=plot+r+%3D+1%2F%28cos%28mod+
+          // %28t%2C+2*PI%2F3%29%29%2Bsqrt%283%29sin%28mod+%28t%2C+2*PI%2F3%29
+          // %29%29%2C+t+%3D+0+..+2*PI
+          settings.shape = function shapeTriangle(theta) {
+            var thetaPrime = theta % (2 * Math.PI / 3);
+            return 1 / (Math.cos(thetaPrime) +
+                        Math.sqrt(3) * Math.sin(thetaPrime));
+          };
+          break;
+
+        case 'triangle':
+        case 'triangle-upright':
+          settings.shape = function shapeTriangle(theta) {
+            var thetaPrime = (theta + Math.PI * 3 / 2) % (2 * Math.PI / 3);
+            return 1 / (Math.cos(thetaPrime) +
+                        Math.sqrt(3) * Math.sin(thetaPrime));
+          };
+          break;
+
+        case 'pentagon':
+          settings.shape = function shapePentagon(theta) {
+            var thetaPrime = (theta + 0.955) % (2 * Math.PI / 5);
+            return 1 / (Math.cos(thetaPrime) +
+                        0.726543 * Math.sin(thetaPrime));
+          };
+          break;
+
+        case 'star':
+          settings.shape = function shapeStar(theta) {
+            var thetaPrime = (theta + 0.955) % (2 * Math.PI / 10);
+            if ((theta + 0.955) % (2 * Math.PI / 5) - (2 * Math.PI / 10) >= 0) {
+              return 1 / (Math.cos((2 * Math.PI / 10) - thetaPrime) +
+                          3.07768 * Math.sin((2 * Math.PI / 10) - thetaPrime));
+            } else {
+              return 1 / (Math.cos(thetaPrime) +
+                          3.07768 * Math.sin(thetaPrime));
+            }
+          };
+          break;
+      }
+    }
+
+    /* Make sure gridSize is a whole number and is not smaller than 4px */
+    settings.gridSize = Math.max(Math.floor(settings.gridSize), 4);
+
+    /* shorthand */
+    var g = settings.gridSize;
+    var maskRectWidth = g - settings.maskGapWidth;
+
+    /* normalize rotation settings */
+    var rotationRange = Math.abs(settings.maxRotation - settings.minRotation);
+    var minRotation = Math.min(settings.maxRotation, settings.minRotation);
+
+    /* information/object available to all functions, set when start() */
+    var grid, // 2d array containing filling information
+      ngx, ngy, // width and height of the grid
+      center, // position of the center of the cloud
+      maxRadius;
+
+    /* timestamp for measuring each putWord() action */
+    var escapeTime;
+
+    /* function for getting the color of the text */
+    var getTextColor;
+    function random_hsl_color(min, max) {
+      return 'hsl(' +
+        (Math.random() * 360).toFixed() + ',' +
+        (Math.random() * 30 + 70).toFixed() + '%,' +
+        (Math.random() * (max - min) + min).toFixed() + '%)';
+    }
+    switch (settings.color) {
+      case 'random-dark':
+        getTextColor = function getRandomDarkColor() {
+          return random_hsl_color(10, 50);
+        };
+        break;
+
+      case 'random-light':
+        getTextColor = function getRandomLightColor() {
+          return random_hsl_color(50, 90);
+        };
+        break;
+
+      default:
+        if (typeof settings.color === 'function') {
+          getTextColor = settings.color;
+        }
+        break;
+    }
+
+    /* function for getting the classes of the text */
+    var getTextClasses = null;
+    if (typeof settings.classes === 'function') {
+      getTextClasses = settings.classes;
+    }
+
+    /* Interactive */
+    var interactive = false;
+    var infoGrid = [];
+    var hovered;
+
+    var getInfoGridFromMouseTouchEvent =
+    function getInfoGridFromMouseTouchEvent(evt) {
+      var canvas = evt.currentTarget;
+      var rect = canvas.getBoundingClientRect();
+      var clientX;
+      var clientY;
+      /** Detect if touches are available */
+      if (evt.touches) {
+        clientX = evt.touches[0].clientX;
+        clientY = evt.touches[0].clientY;
+      } else {
+        clientX = evt.clientX;
+        clientY = evt.clientY;
+      }
+      var eventX = clientX - rect.left;
+      var eventY = clientY - rect.top;
+
+      var x = Math.floor(eventX * ((canvas.width / rect.width) || 1) / g);
+      var y = Math.floor(eventY * ((canvas.height / rect.height) || 1) / g);
+
+      return infoGrid[x][y];
+    };
+
+    var wordcloudhover = function wordcloudhover(evt) {
+      var info = getInfoGridFromMouseTouchEvent(evt);
+
+      if (hovered === info) {
+        return;
+      }
+
+      hovered = info;
+      if (!info) {
+        settings.hover(undefined, undefined, evt);
+
+        return;
+      }
+
+      settings.hover(info.item, info.dimension, evt);
+
+    };
+
+    var wordcloudclick = function wordcloudclick(evt) {
+      var info = getInfoGridFromMouseTouchEvent(evt);
+      if (!info) {
+        return;
+      }
+
+      settings.click(info.item, info.dimension, evt);
+      evt.preventDefault();
+    };
+
+    /* Get points on the grid for a given radius away from the center */
+    var pointsAtRadius = [];
+    var getPointsAtRadius = function getPointsAtRadius(radius) {
+      if (pointsAtRadius[radius]) {
+        return pointsAtRadius[radius];
+      }
+
+      // Look for these number of points on each radius
+      var T = radius * 8;
+
+      // Getting all the points at this radius
+      var t = T;
+      var points = [];
+
+      if (radius === 0) {
+        points.push([center[0], center[1], 0]);
+      }
+
+      while (t--) {
+        // distort the radius to put the cloud in shape
+        var rx = 1;
+        if (settings.shape !== 'circle') {
+          rx = settings.shape(t / T * 2 * Math.PI); // 0 to 1
+        }
+
+        // Push [x, y, t]; t is used solely for getTextColor()
+        points.push([
+          center[0] + radius * rx * Math.cos(-t / T * 2 * Math.PI),
+          center[1] + radius * rx * Math.sin(-t / T * 2 * Math.PI) *
+            settings.ellipticity,
+          t / T * 2 * Math.PI]);
+      }
+
+      pointsAtRadius[radius] = points;
+      return points;
+    };
+
+    /* Return true if we had spent too much time */
+    var exceedTime = function exceedTime() {
+      return ((settings.abortThreshold > 0) &&
+        ((new Date()).getTime() - escapeTime > settings.abortThreshold));
+    };
+
+    /* Get the deg of rotation according to settings, and luck. */
+    var getRotateDeg = function getRotateDeg() {
+      if (settings.rotateRatio === 0) {
+        return 0;
+      }
+
+      if (Math.random() > settings.rotateRatio) {
+        return 0;
+      }
+
+      if (rotationRange === 0) {
+        return minRotation;
+      }
+
+      return minRotation + Math.random() * rotationRange;
+    };
+
+    var getTextInfo = function getTextInfo(word, weight, rotateDeg) {
+      // calculate the acutal font size
+      // fontSize === 0 means weightFactor function wants the text skipped,
+      // and size < minSize means we cannot draw the text.
+      var debug = false;
+      var fontSize = settings.weightFactor(weight);
+      if (fontSize <= settings.minSize) {
+        return false;
+      }
+
+      // Scale factor here is to make sure fillText is not limited by
+      // the minium font size set by browser.
+      // It will always be 1 or 2n.
+      var mu = 1;
+      if (fontSize < minFontSize) {
+        mu = (function calculateScaleFactor() {
+          var mu = 2;
+          while (mu * fontSize < minFontSize) {
+            mu += 2;
+          }
+          return mu;
+        })();
+      }
+
+      var fcanvas = document.createElement('canvas');
+      var fctx = fcanvas.getContext('2d', { willReadFrequently: true });
+
+      fctx.font = settings.fontWeight + ' ' +
+        (fontSize * mu).toString(10) + 'px ' + settings.fontFamily;
+
+      // Estimate the dimension of the text with measureText().
+      var fw = fctx.measureText(word).width / mu;
+      var fh = Math.max(fontSize * mu,
+                        fctx.measureText('m').width,
+                        fctx.measureText('\uFF37').width) / mu;
+
+      // Create a boundary box that is larger than our estimates,
+      // so text don't get cut of (it sill might)
+      var boxWidth = fw + fh * 2;
+      var boxHeight = fh * 3;
+      var fgw = Math.ceil(boxWidth / g);
+      var fgh = Math.ceil(boxHeight / g);
+      boxWidth = fgw * g;
+      boxHeight = fgh * g;
+
+      // Calculate the proper offsets to make the text centered at
+      // the preferred position.
+
+      // This is simply half of the width.
+      var fillTextOffsetX = - fw / 2;
+      // Instead of moving the box to the exact middle of the preferred
+      // position, for Y-offset we move 0.4 instead, so Latin alphabets look
+      // vertical centered.
+      var fillTextOffsetY = - fh * 0.4;
+
+      // Calculate the actual dimension of the canvas, considering the rotation.
+      var cgh = Math.ceil((boxWidth * Math.abs(Math.sin(rotateDeg)) +
+                           boxHeight * Math.abs(Math.cos(rotateDeg))) / g);
+      var cgw = Math.ceil((boxWidth * Math.abs(Math.cos(rotateDeg)) +
+                           boxHeight * Math.abs(Math.sin(rotateDeg))) / g);
+      var width = cgw * g;
+      var height = cgh * g;
+
+      fcanvas.setAttribute('width', width);
+      fcanvas.setAttribute('height', height);
+
+      if (debug) {
+        // Attach fcanvas to the DOM
+        document.body.appendChild(fcanvas);
+        // Save it's state so that we could restore and draw the grid correctly.
+        fctx.save();
+      }
+
+      // Scale the canvas with |mu|.
+      fctx.scale(1 / mu, 1 / mu);
+      fctx.translate(width * mu / 2, height * mu / 2);
+      fctx.rotate(- rotateDeg);
+
+      // Once the width/height is set, ctx info will be reset.
+      // Set it again here.
+      fctx.font = settings.fontWeight + ' ' +
+        (fontSize * mu).toString(10) + 'px ' + settings.fontFamily;
+
+      // Fill the text into the fcanvas.
+      // XXX: We cannot because textBaseline = 'top' here because
+      // Firefox and Chrome uses different default line-height for canvas.
+      // Please read https://bugzil.la/737852#c6.
+      // Here, we use textBaseline = 'middle' and draw the text at exactly
+      // 0.5 * fontSize lower.
+      fctx.fillStyle = '#000';
+      fctx.textBaseline = 'middle';
+      fctx.fillText(word, fillTextOffsetX * mu,
+                    (fillTextOffsetY + fontSize * 0.5) * mu);
+
+      // Get the pixels of the text
+      var imageData = fctx.getImageData(0, 0, width, height).data;
+
+      if (exceedTime()) {
+        return false;
+      }
+
+      if (debug) {
+        // Draw the box of the original estimation
+        fctx.strokeRect(fillTextOffsetX * mu,
+                        fillTextOffsetY, fw * mu, fh * mu);
+        fctx.restore();
+      }
+
+      // Read the pixels and save the information to the occupied array
+      var occupied = [];
+      var gx = cgw, gy, x, y;
+      var bounds = [cgh / 2, cgw / 2, cgh / 2, cgw / 2];
+      while (gx--) {
+        gy = cgh;
+        while (gy--) {
+          y = g;
+          singleGridLoop: {
+            while (y--) {
+              x = g;
+              while (x--) {
+                if (imageData[((gy * g + y) * width +
+                               (gx * g + x)) * 4 + 3]) {
+                  occupied.push([gx, gy]);
+
+                  if (gx < bounds[3]) {
+                    bounds[3] = gx;
+                  }
+                  if (gx > bounds[1]) {
+                    bounds[1] = gx;
+                  }
+                  if (gy < bounds[0]) {
+                    bounds[0] = gy;
+                  }
+                  if (gy > bounds[2]) {
+                    bounds[2] = gy;
+                  }
+
+                  if (debug) {
+                    fctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
+                    fctx.fillRect(gx * g, gy * g, g - 0.5, g - 0.5);
+                  }
+                  break singleGridLoop;
+                }
+              }
+            }
+            if (debug) {
+              fctx.fillStyle = 'rgba(0, 0, 255, 0.5)';
+              fctx.fillRect(gx * g, gy * g, g - 0.5, g - 0.5);
+            }
+          }
+        }
+      }
+
+      if (debug) {
+        fctx.fillStyle = 'rgba(0, 255, 0, 0.5)';
+        fctx.fillRect(bounds[3] * g,
+                      bounds[0] * g,
+                      (bounds[1] - bounds[3] + 1) * g,
+                      (bounds[2] - bounds[0] + 1) * g);
+      }
+
+      // Return information needed to create the text on the real canvas
+      return {
+        mu: mu,
+        occupied: occupied,
+        bounds: bounds,
+        gw: cgw,
+        gh: cgh,
+        fillTextOffsetX: fillTextOffsetX,
+        fillTextOffsetY: fillTextOffsetY,
+        fillTextWidth: fw,
+        fillTextHeight: fh,
+        fontSize: fontSize
+      };
+    };
+
+    /* Determine if there is room available in the given dimension */
+    var canFitText = function canFitText(gx, gy, gw, gh, occupied) {
+      // Go through the occupied points,
+      // return false if the space is not available.
+      var i = occupied.length;
+      while (i--) {
+        var px = gx + occupied[i][0];
+        var py = gy + occupied[i][1];
+
+        if (px >= ngx || py >= ngy || px < 0 || py < 0 || !grid[px][py]) {
+          return false;
+        }
+      }
+      return true;
+    };
+
+    /* Actually draw the text on the grid */
+    var drawText = function drawText(gx, gy, info, word, weight,
+                                     distance, theta, rotateDeg, attributes) {
+
+      var fontSize = info.fontSize;
+      var color;
+      if (getTextColor) {
+        color = getTextColor(word, weight, fontSize, distance, theta);
+      } else if (settings.color instanceof Array) {
+        color = settings.color.shift() || 'black'; // pass a array in setting, default 'black'
+      } else {
+        color = settings.color;
+      }
+
+      var classes;
+      if (getTextClasses) {
+        classes = getTextClasses(word, weight, fontSize, distance, theta);
+      } else {
+        classes = settings.classes;
+      }
+
+      var dimension;
+      var bounds = info.bounds;
+      dimension = {
+        x: (gx + bounds[3]) * g,
+        y: (gy + bounds[0]) * g,
+        w: (bounds[1] - bounds[3] + 1) * g,
+        h: (bounds[2] - bounds[0] + 1) * g
+      };
+
+      elements.forEach(function(el) {
+        if (el.getContext) {
+          var ctx = el.getContext('2d');
+          var mu = info.mu;
+
+          // Save the current state before messing it
+          ctx.save();
+          ctx.scale(1 / mu, 1 / mu);
+
+          ctx.font = settings.fontWeight + ' ' +
+                     (fontSize * mu).toString(10) + 'px ' + settings.fontFamily;
+          ctx.fillStyle = color;
+
+          // Translate the canvas position to the origin coordinate of where
+          // the text should be put.
+          ctx.translate((gx + info.gw / 2) * g * mu,
+                        (gy + info.gh / 2) * g * mu);
+
+          if (rotateDeg !== 0) {
+            ctx.rotate(- rotateDeg);
+          }
+
+          // Finally, fill the text.
+
+          // XXX: We cannot because textBaseline = 'top' here because
+          // Firefox and Chrome uses different default line-height for canvas.
+          // Please read https://bugzil.la/737852#c6.
+          // Here, we use textBaseline = 'middle' and draw the text at exactly
+          // 0.5 * fontSize lower.
+          ctx.textBaseline = 'middle';
+          ctx.fillText(word, info.fillTextOffsetX * mu,
+                             (info.fillTextOffsetY + fontSize * 0.5) * mu);
+
+          // The below box is always matches how <span>s are positioned
+          /* ctx.strokeRect(info.fillTextOffsetX, info.fillTextOffsetY,
+            info.fillTextWidth, info.fillTextHeight); */
+
+          // Restore the state.
+          ctx.restore();
+        } else {
+          // drawText on DIV element
+          var span = document.createElement('span');
+          var transformRule = '';
+          transformRule = 'rotate(' + (- rotateDeg / Math.PI * 180) + 'deg) ';
+          if (info.mu !== 1) {
+            transformRule +=
+              'translateX(-' + (info.fillTextWidth / 4) + 'px) ' +
+              'scale(' + (1 / info.mu) + ')';
+          }
+          var styleRules = {
+            'position': 'absolute',
+            'display': 'block',
+            'font': settings.fontWeight + ' ' +
+                    (fontSize * info.mu) + 'px ' + settings.fontFamily,
+            'left': ((gx + info.gw / 2) * g + info.fillTextOffsetX) + 'px',
+            'top': ((gy + info.gh / 2) * g + info.fillTextOffsetY) + 'px',
+            'width': info.fillTextWidth + 'px',
+            'height': info.fillTextHeight + 'px',
+            'lineHeight': fontSize + 'px',
+            'whiteSpace': 'nowrap',
+            'transform': transformRule,
+            'webkitTransform': transformRule,
+            'msTransform': transformRule,
+            'transformOrigin': '50% 40%',
+            'webkitTransformOrigin': '50% 40%',
+            'msTransformOrigin': '50% 40%'
+          };
+          if (color) {
+            styleRules.color = color;
+          }
+          span.textContent = word;
+          for (var cssProp in styleRules) {
+            span.style[cssProp] = styleRules[cssProp];
+          }
+          if (attributes) {
+            for (var attribute in attributes) {
+              span.setAttribute(attribute, attributes[attribute]);
+            }
+          }
+          if (classes) {
+            span.className += classes;
+          }
+          el.appendChild(span);
+        }
+      });
+    };
+
+    /* Help function to updateGrid */
+    var fillGridAt = function fillGridAt(x, y, drawMask, dimension, item) {
+      if (x >= ngx || y >= ngy || x < 0 || y < 0) {
+        return;
+      }
+
+      grid[x][y] = false;
+
+      if (drawMask) {
+        var ctx = elements[0].getContext('2d');
+        ctx.fillRect(x * g, y * g, maskRectWidth, maskRectWidth);
+      }
+
+      if (interactive) {
+        infoGrid[x][y] = { item: item, dimension: dimension };
+      }
+    };
+
+    /* Update the filling information of the given space with occupied points.
+       Draw the mask on the canvas if necessary. */
+    var updateGrid = function updateGrid(gx, gy, gw, gh, info, item) {
+      var occupied = info.occupied;
+      var drawMask = settings.drawMask;
+      var ctx;
+      if (drawMask) {
+        ctx = elements[0].getContext('2d');
+        ctx.save();
+        ctx.fillStyle = settings.maskColor;
+      }
+
+      var dimension;
+      if (interactive) {
+        var bounds = info.bounds;
+        dimension = {
+          x: (gx + bounds[3]) * g,
+          y: (gy + bounds[0]) * g,
+          w: (bounds[1] - bounds[3] + 1) * g,
+          h: (bounds[2] - bounds[0] + 1) * g
+        };
+      }
+
+      var i = occupied.length;
+      while (i--) {
+        fillGridAt(gx + occupied[i][0], gy + occupied[i][1],
+                   drawMask, dimension, item);
+      }
+
+      if (drawMask) {
+        ctx.restore();
+      }
+    };
+
+    /* putWord() processes each item on the list,
+       calculate it's size and determine it's position, and actually
+       put it on the canvas. */
+    var putWord = function putWord(item) {
+      var word, weight, attributes;
+      if (Array.isArray(item)) {
+        word = item[0];
+        weight = item[1];
+      } else {
+        word = item.word;
+        weight = item.weight;
+        attributes = item.attributes;
+      }
+      var rotateDeg = getRotateDeg();
+
+      // get info needed to put the text onto the canvas
+      var info = getTextInfo(word, weight, rotateDeg);
+
+      // not getting the info means we shouldn't be drawing this one.
+      if (!info) {
+        return false;
+      }
+
+      if (exceedTime()) {
+        return false;
+      }
+
+      // Skip the loop if we have already know the bounding box of
+      // word is larger than the canvas.
+      var bounds = info.bounds;
+      if ((bounds[1] - bounds[3] + 1) > ngx ||
+        (bounds[2] - bounds[0] + 1) > ngy) {
+        return false;
+      }
+
+      // Determine the position to put the text by
+      // start looking for the nearest points
+      var r = maxRadius + 1;
+
+      var tryToPutWordAtPoint = function(gxy) {
+        var gx = Math.floor(gxy[0] - info.gw / 2);
+        var gy = Math.floor(gxy[1] - info.gh / 2);
+        var gw = info.gw;
+        var gh = info.gh;
+
+        // If we cannot fit the text at this position, return false
+        // and go to the next position.
+        if (!canFitText(gx, gy, gw, gh, info.occupied)) {
+          return false;
+        }
+
+        // Actually put the text on the canvas
+        drawText(gx, gy, info, word, weight,
+                 (maxRadius - r), gxy[2], rotateDeg, attributes);
+
+        // Mark the spaces on the grid as filled
+        updateGrid(gx, gy, gw, gh, info, item);
+
+        // Return true so some() will stop and also return true.
+        return true;
+      };
+
+      while (r--) {
+        var points = getPointsAtRadius(maxRadius - r);
+
+        if (settings.shuffle) {
+          points = [].concat(points);
+          shuffleArray(points);
+        }
+
+        // Try to fit the words by looking at each point.
+        // array.some() will stop and return true
+        // when putWordAtPoint() returns true.
+        // If all the points returns false, array.some() returns false.
+        var drawn = points.some(tryToPutWordAtPoint);
+
+        if (drawn) {
+          // leave putWord() and return true
+          return true;
+        }
+      }
+      // we tried all distances but text won't fit, return false
+      return false;
+    };
+
+    /* Send DOM event to all elements. Will stop sending event and return
+       if the previous one is canceled (for cancelable events). */
+    var sendEvent = function sendEvent(type, cancelable, detail) {
+      if (cancelable) {
+        return !elements.some(function(el) {
+          var evt = document.createEvent('CustomEvent');
+          evt.initCustomEvent(type, true, cancelable, detail || {});
+          return !el.dispatchEvent(evt);
+        }, this);
+      } else {
+        elements.forEach(function(el) {
+          var evt = document.createEvent('CustomEvent');
+          evt.initCustomEvent(type, true, cancelable, detail || {});
+          el.dispatchEvent(evt);
+        }, this);
+      }
+    };
+
+    /* Start drawing on a canvas */
+    var start = function start() {
+      // For dimensions, clearCanvas etc.,
+      // we only care about the first element.
+      var canvas = elements[0];
+
+      if (canvas.getContext) {
+        ngx = Math.floor(canvas.width / g);
+        ngy = Math.floor(canvas.height / g);
+      } else {
+        var rect = canvas.getBoundingClientRect();
+        ngx = Math.floor(rect.width / g);
+        ngy = Math.floor(rect.height / g);
+      }
+
+      // Sending a wordcloudstart event which cause the previous loop to stop.
+      // Do nothing if the event is canceled.
+      if (!sendEvent('wordcloudstart', true)) {
+        return;
+      }
+
+      // Determine the center of the word cloud
+      center = (settings.origin) ?
+        [settings.origin[0]/g, settings.origin[1]/g] :
+        [ngx / 2, ngy / 2];
+
+      // Maxium radius to look for space
+      maxRadius = Math.floor(Math.sqrt(ngx * ngx + ngy * ngy));
+
+      /* Clear the canvas only if the clearCanvas is set,
+         if not, update the grid to the current canvas state */
+      grid = [];
+
+      var gx, gy, i;
+      if (!canvas.getContext || settings.clearCanvas) {
+        elements.forEach(function(el) {
+          if (el.getContext) {
+            var ctx = el.getContext('2d');
+            ctx.fillStyle = settings.backgroundColor;
+            ctx.clearRect(0, 0, ngx * (g + 1), ngy * (g + 1));
+            ctx.fillRect(0, 0, ngx * (g + 1), ngy * (g + 1));
+          } else {
+            el.textContent = '';
+            el.style.backgroundColor = settings.backgroundColor;
+          }
+        });
+
+        /* fill the grid with empty state */
+        gx = ngx;
+        while (gx--) {
+          grid[gx] = [];
+          gy = ngy;
+          while (gy--) {
+            grid[gx][gy] = true;
+          }
+        }
+      } else {
+        /* Determine bgPixel by creating
+           another canvas and fill the specified background color. */
+        var bctx = document.createElement('canvas').getContext('2d');
+
+        bctx.fillStyle = settings.backgroundColor;
+        bctx.fillRect(0, 0, 1, 1);
+        var bgPixel = bctx.getImageData(0, 0, 1, 1).data;
+
+        /* Read back the pixels of the canvas we got to tell which part of the
+           canvas is empty.
+           (no clearCanvas only works with a canvas, not divs) */
+        var imageData =
+          canvas.getContext('2d').getImageData(0, 0, ngx * g, ngy * g).data;
+
+        gx = ngx;
+        var x, y;
+        while (gx--) {
+          grid[gx] = [];
+          gy = ngy;
+          while (gy--) {
+            y = g;
+            singleGridLoop: while (y--) {
+              x = g;
+              while (x--) {
+                i = 4;
+                while (i--) {
+                  if (imageData[((gy * g + y) * ngx * g +
+                                 (gx * g + x)) * 4 + i] !== bgPixel[i]) {
+                    grid[gx][gy] = false;
+                    break singleGridLoop;
+                  }
+                }
+              }
+            }
+            if (grid[gx][gy] !== false) {
+              grid[gx][gy] = true;
+            }
+          }
+        }
+
+        imageData = bctx = bgPixel = undefined;
+      }
+
+      // fill the infoGrid with empty state if we need it
+      if (settings.hover || settings.click) {
+
+        interactive = true;
+
+        /* fill the grid with empty state */
+        gx = ngx + 1;
+        while (gx--) {
+          infoGrid[gx] = [];
+        }
+
+        if (settings.hover) {
+          canvas.addEventListener('mousemove', wordcloudhover);
+        }
+
+        if (settings.click) {
+          canvas.addEventListener('click', wordcloudclick);
+          canvas.addEventListener('touchstart', wordcloudclick);
+          canvas.addEventListener('touchend', function (e) {
+            e.preventDefault();
+          });
+          canvas.style.webkitTapHighlightColor = 'rgba(0, 0, 0, 0)';
+        }
+
+        canvas.addEventListener('wordcloudstart', function stopInteraction() {
+          canvas.removeEventListener('wordcloudstart', stopInteraction);
+
+          canvas.removeEventListener('mousemove', wordcloudhover);
+          canvas.removeEventListener('click', wordcloudclick);
+          hovered = undefined;
+        });
+      }
+
+      i = 0;
+      var loopingFunction, stoppingFunction;
+      if (settings.wait !== 0) {
+        loopingFunction = window.setTimeout;
+        stoppingFunction = window.clearTimeout;
+      } else {
+        loopingFunction = window.setImmediate;
+        stoppingFunction = window.clearImmediate;
+      }
+
+      var addEventListener = function addEventListener(type, listener) {
+        elements.forEach(function(el) {
+          el.addEventListener(type, listener);
+        }, this);
+      };
+
+      var removeEventListener = function removeEventListener(type, listener) {
+        elements.forEach(function(el) {
+          el.removeEventListener(type, listener);
+        }, this);
+      };
+
+      var anotherWordCloudStart = function anotherWordCloudStart() {
+        removeEventListener('wordcloudstart', anotherWordCloudStart);
+        stoppingFunction(timer);
+      };
+
+      addEventListener('wordcloudstart', anotherWordCloudStart);
+
+      var timer = loopingFunction(function loop() {
+        if (i >= settings.list.length) {
+          stoppingFunction(timer);
+          sendEvent('wordcloudstop', false);
+          removeEventListener('wordcloudstart', anotherWordCloudStart);
+
+          return;
+        }
+        escapeTime = (new Date()).getTime();
+        var drawn = putWord(settings.list[i]);
+        var canceled = !sendEvent('wordclouddrawn', true, {
+          item: settings.list[i], drawn: drawn });
+        if (exceedTime() || canceled) {
+          stoppingFunction(timer);
+          settings.abort();
+          sendEvent('wordcloudabort', false);
+          sendEvent('wordcloudstop', false);
+          removeEventListener('wordcloudstart', anotherWordCloudStart);
+          return;
+        }
+        i++;
+        timer = loopingFunction(loop, settings.wait);
+      }, settings.wait);
+    };
+
+    // All set, start the drawing
+    start();
+  };
+
+  WordCloud.isSupported = isSupported;
+  WordCloud.minFontSize = minFontSize;
+
+  // Expose the library as an AMD module
+  if (typeof define === 'function' && define.amd) {
+    define('wordcloud', [], function() { return WordCloud; });
+  } else if (typeof module !== 'undefined' && module.exports) {
+    module.exports = WordCloud;
+  } else {
+    global.WordCloud = WordCloud;
+  }
+
+})(this); //jshint ignore:line
+</script>
+<script>// create element
+function newlabel(el){
+  var newDiv = document.createElement("div");
+  var newSpan = document.createElement("span");
+  newDiv.id = 'wcLabel';
+  newSpan.id = "wcSpan";
+  el.appendChild(newDiv);
+  document.getElementById("wcLabel").appendChild(newSpan);
+}
+
+// hover function
+function cv_handleHover(item, dimension, evt) {
+  var el = document.getElementById("wcLabel");
+  if (!item) {
+    el.setAttribute('hidden', true);
+
+    return;
+  }
+
+  el.removeAttribute('hidden');
+  // console.log(evt.srcElement.offsetLeft);
+
+  el.style.left = dimension.x + evt.srcElement.offsetLeft + 'px';
+  el.style.top = dimension.y + evt.srcElement.offsetTop + 'px';
+  el.style.width = dimension.w + 'px';
+  el.style.height = dimension.h + 'px';
+
+  this.hoverDimension = dimension;
+
+  document.getElementById("wcSpan").setAttribute(
+    'data-l10n-args', JSON.stringify({ word: item[0], count: item[1] }));
+  document.getElementById("wcSpan").innerHTML =item[0]+":" + item[1];
+
+}
+
+function updateCanvasMask(maskCanvas) {
+    var ctx = maskCanvas.getContext('2d');
+    var imageData = ctx.getImageData(
+        0, 0, maskCanvas.width, maskCanvas.height);
+    var newImageData = ctx.createImageData(imageData);
+
+    var toneSum = 0;
+    var toneCnt = 0;
+    for (var i = 0; i < imageData.data.length; i += 4) {
+        var alpha = imageData.data[i + 3];
+        if (alpha > 128) {
+            var tone = imageData.data[i]
+                + imageData.data[i + 1]
+                + imageData.data[i + 2];
+            toneSum += tone;
+            ++toneCnt;
+        }
+    }
+    var threshold = toneSum / toneCnt;
+
+    for (var i = 0; i < imageData.data.length; i += 4) {
+        var tone = imageData.data[i]
+            + imageData.data[i + 1]
+            + imageData.data[i + 2];
+        var alpha = imageData.data[i + 3];
+
+        if (alpha < 128 || tone > threshold) {
+            // Area not to draw
+            newImageData.data[i] = 0;
+            newImageData.data[i + 1] = 0;
+            newImageData.data[i + 2] = 0;
+            newImageData.data[i + 3] = 0;
+        }
+        else {
+            // Area to draw
+            // The color must be same with backgroundColor
+            newImageData.data[i] = 255;
+            newImageData.data[i + 1] = 255;
+            newImageData.data[i + 2] = 255;
+            newImageData.data[i + 3] = 255;
+        }
+    }
+
+    ctx.putImageData(newImageData, 0, 0);
+    console.log(maskCanvas.toDataURL());
+}
+
+
+
+//mask function
+function maskInit(el,x){
+  console.log(1)
+  str = x.figBase64;
+  //console.log(str)
+  var newImg = new Image();
+  newImg.src = str;
+  newImg.style.position = 'absolute';
+  newImg.style.left = 0;
+  // console.log(el.clientHeight);
+  newImg.width = el.clientWidth;
+  newImg.height = el.clientHeight;
+  // maskCanvas = init(el, x, newImg);
+  vvalue = 128
+
+  ctx = el.firstChild.getContext('2d');
+
+                ctx.drawImage(newImg, 0, 0, canvas.width, canvas.height);
+                updateCanvasMask(ctx);
+
+
+
+
+
+            WordCloud(el.firstChild, { list: listData,
+                  fontFamily: x.fontFamily,
+                  fontWeight: x.fontWeight,
+                  color: x.color,
+                  minSize: x.minSize,
+                  weightFactor: x.weightFactor,
+                  backgroundColor: x.backgroundColor,
+                  gridSize: x.gridSize,
+                  minRotation: x.minRotation,
+                  maxRotation: x.maxRotation,
+                  shuffle: x.shuffle,
+                  shape: x.shape,
+                  rotateRatio: x.rotateRatio,
+                  ellipticity: x.ellipticity,
+                  clearCanvas: false,
+                  drawMask: true,
+                  hover: x.hover || cv_handleHover,
+                  abortThreshold: 3000
+                  });
+}
+
+</script>
+<script>HTMLWidgets.widget({
+
+  name: 'wordcloud2',
+
+  type: 'output',
+
+  initialize: function(el, width, height) {
+    var newCanvas = document.createElement("canvas");
+    newCanvas.height = height;
+    newCanvas.width = width;
+    newCanvas.id = "canvas";
+
+    el.appendChild(newCanvas);
+    newlabel(el);
+    return(el.firstChild);
+  },
+  renderValue: function(el, x, instance) {
+  // parse gexf data
+        listData=[];
+        for(var i=0; i<x.word.length; i++){
+          listData.push([x.word[i], x.freq[i]]);
+        }
+     if(x.figBase64){
+
+        maskInit(el,x);
+        console.log(3)
+
+      }else{
+        WordCloud(el.firstChild, { list: listData,
+                        fontFamily: x.fontFamily,
+                        fontWeight: x.fontWeight,
+                        color: x.color,
+                        minSize: x.minSize,
+                        weightFactor: x.weightFactor,
+                        backgroundColor: x.backgroundColor,
+                        gridSize: x.gridSize,
+                        minRotation: x.minRotation,
+                        maxRotation: x.maxRotation,
+                        shuffle: x.shuffle,
+                        shape: x.shape,
+                        rotateRatio: x.rotateRatio,
+                        ellipticity: x.ellipticity,
+                        drawMask: x.drawMask,
+                        maskColor: x.maskColor,
+                        maskGapWidth: x.maskGapWidth,
+                        hover: x.hover || cv_handleHover
+                        });
+      }
+    },
+      resize: function(el, width, height) {
+      }
+
+});
+</script>
+
+<style type="text/css">
+  code{white-space: pre-wrap;}
+  span.smallcaps{font-variant: small-caps;}
+  span.underline{text-decoration: underline;}
+  div.column{display: inline-block; vertical-align: top; width: 50%;}
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+  ul.task-list{list-style: none;}
+    </style>
+
+
+<style type="text/css">
+  code {
+    white-space: pre;
+  }
+  .sourceCode {
+    overflow: visible;
+  }
+</style>
+<style type="text/css" data-origin="pandoc">
+a.sourceLine { display: inline-block; line-height: 1.25; }
+a.sourceLine { pointer-events: none; color: inherit; text-decoration: inherit; }
+a.sourceLine:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode { white-space: pre; position: relative; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+code.sourceCode { white-space: pre-wrap; }
+a.sourceLine { text-indent: -1em; padding-left: 1em; }
+}
+pre.numberSource a.sourceLine
+  { position: relative; left: -4em; }
+pre.numberSource a.sourceLine::before
+  { content: attr(data-line-number);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; pointer-events: all; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+    color: #aaaaaa;
+  }
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+div.sourceCode
+  {  }
+@media screen {
+a.sourceLine::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code span.at { color: #7d9029; } /* Attribute */
+code span.bn { color: #40a070; } /* BaseN */
+code span.bu { } /* BuiltIn */
+code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code span.ch { color: #4070a0; } /* Char */
+code span.cn { color: #880000; } /* Constant */
+code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code span.dt { color: #902000; } /* DataType */
+code span.dv { color: #40a070; } /* DecVal */
+code span.er { color: #ff0000; font-weight: bold; } /* Error */
+code span.ex { } /* Extension */
+code span.fl { color: #40a070; } /* Float */
+code span.fu { color: #06287e; } /* Function */
+code span.im { } /* Import */
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code span.op { color: #666666; } /* Operator */
+code span.ot { color: #007020; } /* Other */
+code span.pp { color: #bc7a00; } /* Preprocessor */
+code span.sc { color: #4070a0; } /* SpecialChar */
+code span.ss { color: #bb6688; } /* SpecialString */
+code span.st { color: #4070a0; } /* String */
+code span.va { color: #19177c; } /* Variable */
+code span.vs { color: #4070a0; } /* VerbatimString */
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    for (var j = 0; j < rules.length; j++) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") continue;
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') continue;
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">MedLEA</h1>
+
+
+
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb1-1" data-line-number="1"><span class="kw">library</span>(MedLEA)</a></code></pre></div>
+<div id="wordcloud-of-family-of-the-medicinal-plants" class="section level2">
+<h2>Wordcloud of Family of the Medicinal Plants</h2>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb2-1" data-line-number="1"><span class="kw">library</span>(tidyverse)</a>
+<a class="sourceLine" id="cb2-2" data-line-number="2"><span class="kw">library</span>(wordcloud2)</a>
+<a class="sourceLine" id="cb2-3" data-line-number="3"><span class="kw">library</span>(patchwork)</a>
+<a class="sourceLine" id="cb2-4" data-line-number="4"><span class="kw">library</span>(tm)</a>
+<a class="sourceLine" id="cb2-5" data-line-number="5"></a>
+<a class="sourceLine" id="cb2-6" data-line-number="6"><span class="co">#unique(medlea$Family_Name)</span></a>
+<a class="sourceLine" id="cb2-7" data-line-number="7"></a>
+<a class="sourceLine" id="cb2-8" data-line-number="8">text1 &lt;-<span class="st"> </span>medlea<span class="op">$</span>Family_Name</a>
+<a class="sourceLine" id="cb2-9" data-line-number="9">docs &lt;-<span class="st"> </span><span class="kw">Corpus</span>(<span class="kw">VectorSource</span>(text1))</a>
+<a class="sourceLine" id="cb2-10" data-line-number="10">docs &lt;-<span class="st"> </span>docs<span class="op">%&gt;%</span><span class="st"> </span><span class="kw">tm_map</span>(stripWhitespace)</a>
+<a class="sourceLine" id="cb2-11" data-line-number="11">dtm &lt;-<span class="st"> </span><span class="kw">TermDocumentMatrix</span>(docs)</a>
+<a class="sourceLine" id="cb2-12" data-line-number="12">matrix &lt;-<span class="st"> </span><span class="kw">as.matrix</span>(dtm)</a>
+<a class="sourceLine" id="cb2-13" data-line-number="13">words &lt;-<span class="st"> </span><span class="kw">sort</span>(<span class="kw">rowSums</span>(matrix), <span class="dt">decreasing =</span> <span class="ot">TRUE</span>)</a>
+<a class="sourceLine" id="cb2-14" data-line-number="14">df &lt;-<span class="st"> </span><span class="kw">data.frame</span>(<span class="dt">word =</span> <span class="kw">names</span>(words), <span class="dt">freq =</span> words)</a>
+<a class="sourceLine" id="cb2-15" data-line-number="15">p1 &lt;-<span class="st"> </span><span class="kw">wordcloud2</span>(<span class="dt">data =</span> df, <span class="dt">size =</span> <span class="fl">0.9</span>,<span class="dt">color =</span> <span class="st">'random-dark'</span>, <span class="dt">shape =</span> <span class="st">'pentagon'</span>)</a>
+<a class="sourceLine" id="cb2-16" data-line-number="16">p1</a></code></pre></div>
+<div id="htmlwidget-c27fc6e6bbe7ed3ad19d" style="width:288px;height:288px;" class="wordcloud2 html-widget"></div>
+<script type="application/json" data-for="htmlwidget-c27fc6e6bbe7ed3ad19d">{"x":{"word":["fabaceae","euphorbiaceae","poaceae","rubiaceae","rutaceae","annonaceae","asteraceae","myrtaceae","cucurbitaceae","malvaceae","acanthaceae","convolvulaceae","dipterocarpaceae","orchidaceae","rosaceae","moraceae","solanaceae","lamiaceae","cyperaceae","apocynaceae","passifloraceae","araceae","amaranthaceae","arecaceae","lauraceae","piperaceae","menispermaceae","sapotaceae","apiaceae","verbenaceae","sapindaceae","flacourtiaceae","sterculiaceae","meliaceae","simaroubaceae","theaceae","bignoniaceae","clusiaceae","rhamnaceae","brassicaceae","rhizophoraceae","oleaceae","asclepiadaceae","tiliaceae","pandanaceae","capparaceae","polygonaceae","alliaceae","zingiberaceae","amaryllidaceae","dioscoreaceae","lobeliaceae","nyctaginaceae","connaraceae","melastomaceae","elaeocarpaceae","periplocaceae","thymelaeaceae","ebenaceae","polygalaceae","aristolochiaceae","crassulaceae","plumbaginaceae","celastraceae","ranunculaceae","oxalidaceae","pedaliaceae","droseraceae","dracaenaceae","primulaceae","symplocaceae","portulacaceae","icacinaceae","anacardiaceae","urticaceae","ulmaceae","magnoliaceae","myrsinaceae","salvadoraceae","acoraceae","hypoxidaceae","scrophulariaceae","adiantaceae","monimiaceae","loganiaceae","ericaceae","lecythidaceae","goodeniaceae","valerianaceae","proteaceae","gentianaceae","pteridaceae","myristicaceae","nyctanthaceae","santalaceae","burseraceae","alangiaceae","papaveraceae","menyanthaceae","dryopteridaceae","nymphaeaceae","hernandiaceae","ophioglosaceae","eriocaulaceae","loranthaceae","olacaceae","malpighiaceae","saxifraginaceae","molluginaceae","blechnaceae","parkeriaceae","cactaceae","sabiaceae","colchicaceae","mariyniaceae","asparagaceae","moringaceae","punicaceae"],"freq":[45,33,24,15,14,13,13,10,10,10,10,8,8,8,8,8,7,7,7,7,6,6,6,6,6,5,5,5,5,5,5,4,4,4,4,4,4,4,3,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],"fontFamily":"Segoe UI","fontWeight":"bold","color":"random-dark","minSize":0,"weightFactor":3.6,"backgroundColor":"white","gridSize":0,"minRotation":-0.785398163397448,"maxRotation":0.785398163397448,"shuffle":true,"rotateRatio":0.4,"shape":"pentagon","ellipticity":0.65,"figBase64":null,"hover":null},"evals":[],"jsHooks":{"render":[{"code":"function(el,x){\n                        console.log(123);\n                        if(!iii){\n                          window.location.reload();\n                          iii = False;\n\n                        }\n  }","data":null}]}}</script>
+</div>
+<div id="composition-of-the-sample-by-shape-and-edge-type-of-leaves" class="section level2">
+<h2>Composition of the Sample by Shape and Edge Type of Leaves</h2>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb3-1" data-line-number="1">medlea &lt;-<span class="st"> </span><span class="kw">filter</span>(medlea, Arrangements <span class="op">==</span><span class="st"> &quot;Simple&quot;</span>)</a>
+<a class="sourceLine" id="cb3-2" data-line-number="2"></a>
+<a class="sourceLine" id="cb3-3" data-line-number="3">d11 &lt;-<span class="st"> </span><span class="kw">as.data.frame</span>(<span class="kw">table</span>(medlea<span class="op">$</span>Shape))</a>
+<a class="sourceLine" id="cb3-4" data-line-number="4"><span class="kw">names</span>(d11) &lt;-<span class="st"> </span><span class="kw">c</span>(<span class="st">'Shape_of_the_leaf'</span>, <span class="st">'No_of_leaves'</span>)</a>
+<a class="sourceLine" id="cb3-5" data-line-number="5"></a>
+<a class="sourceLine" id="cb3-6" data-line-number="6">p2 &lt;-<span class="st"> </span><span class="kw">ggplot</span>(d11, <span class="kw">aes</span>(<span class="dt">x=</span> <span class="kw">reorder</span>(Shape_of_the_leaf, No_of_leaves), <span class="dt">y=</span>No_of_leaves)) <span class="op">+</span><span class="st"> </span><span class="kw">labs</span>(<span class="dt">y=</span><span class="st">&quot;Number of leaves&quot;</span>, <span class="dt">x=</span><span class="st">&quot;Shape of the leaf&quot;</span>) <span class="op">+</span><span class="st"> </span><span class="kw">geom_bar</span>(<span class="dt">stat =</span> <span class="st">&quot;identity&quot;</span>, <span class="dt">width =</span> <span class="fl">0.6</span>) <span class="op">+</span><span class="st"> </span><span class="kw">ggtitle</span>(<span class="st">&quot;Composition of the Sample by the Shape Label&quot;</span>) <span class="op">+</span><span class="st"> </span><span class="kw">coord_flip</span>()</a></code></pre></div>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb4-1" data-line-number="1">d11 &lt;-<span class="st"> </span><span class="kw">as.data.frame</span>(<span class="kw">table</span>(medlea<span class="op">$</span>Edges))</a>
+<a class="sourceLine" id="cb4-2" data-line-number="2"><span class="kw">names</span>(d11) &lt;-<span class="st"> </span><span class="kw">c</span>(<span class="st">'Edges'</span>, <span class="st">'No_of_leaves'</span>)</a>
+<a class="sourceLine" id="cb4-3" data-line-number="3"><span class="co">#d11 &lt;- d11 %&gt;% mutate(Percentage = round(No_of_leaves*100/sum(No_of_leaves),0))</span></a>
+<a class="sourceLine" id="cb4-4" data-line-number="4"><span class="co">#ggplot(d11, aes(x= reorder(Shape_of_the_leaf, Percentage), y=Percentage)) + labs(y=&quot;Percentage&quot;, x=&quot;Shape of the leaf&quot;) + geom_bar(stat = &quot;identity&quot;, width = 0.5) + geom_label(aes(label = paste0(Percentage, &quot;%&quot;)), nudge_y = -3, size = 3.25, label.padding = unit(0.175,&quot;lines&quot;)) + ggtitle(&quot;Composition of the Sample by the Shape Label&quot;) + coord_flip()</span></a>
+<a class="sourceLine" id="cb4-5" data-line-number="5"></a>
+<a class="sourceLine" id="cb4-6" data-line-number="6">p3 &lt;-<span class="st"> </span><span class="kw">ggplot</span>(d11, <span class="kw">aes</span>(<span class="dt">x=</span> <span class="kw">reorder</span>(Edges, No_of_leaves), <span class="dt">y=</span>No_of_leaves)) <span class="op">+</span><span class="st"> </span><span class="kw">labs</span>(<span class="dt">y=</span><span class="st">&quot;Number of leaves&quot;</span>, <span class="dt">x=</span><span class="st">&quot;Edge type of the leaf&quot;</span>) <span class="op">+</span><span class="st"> </span><span class="kw">geom_bar</span>(<span class="dt">stat =</span> <span class="st">&quot;identity&quot;</span>, <span class="dt">width =</span> <span class="fl">0.6</span>) <span class="op">+</span><span class="st"> </span><span class="kw">ggtitle</span>(<span class="st">&quot;Composition of the Sample by the Edge Type&quot;</span>) <span class="op">+</span><span class="st"> </span><span class="kw">coord_flip</span>()</a>
+<a class="sourceLine" id="cb4-7" data-line-number="7"></a>
+<a class="sourceLine" id="cb4-8" data-line-number="8">p2 <span class="op">+</span><span class="st"> </span>p3 <span class="op">+</span><span class="st"> </span><span class="kw">plot_layout</span>(<span class="dt">ncol =</span> <span class="dv">1</span>)</a></code></pre></div>
+<p><img src="data:image/png;base64,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" /><!-- --></p>
+</div>
+<div id="composition-of-the-sample-by-shape-and-edge-type-of-leaves-in-simple-arrangement" class="section level2">
+<h2>Composition of the Sample by Shape and Edge type of Leaves in Simple Arrangement</h2>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb5-1" data-line-number="1">medlea &lt;-<span class="st"> </span><span class="kw">filter</span>(medlea, Shape <span class="op">!=</span><span class="st"> &quot;Scale-like shaped&quot;</span>)</a>
+<a class="sourceLine" id="cb5-2" data-line-number="2"></a>
+<a class="sourceLine" id="cb5-3" data-line-number="3">d29 &lt;-<span class="st"> </span><span class="kw">as.data.frame</span>(<span class="kw">table</span>(medlea<span class="op">$</span>Shape,medlea<span class="op">$</span>Edges))</a>
+<a class="sourceLine" id="cb5-4" data-line-number="4"><span class="kw">names</span>(d29) &lt;-<span class="st"> </span><span class="kw">c</span>(<span class="st">'Shape'</span>,<span class="st">'Edges'</span>,<span class="st">'No_of_leaves'</span>)</a>
+<a class="sourceLine" id="cb5-5" data-line-number="5"></a>
+<a class="sourceLine" id="cb5-6" data-line-number="6"></a>
+<a class="sourceLine" id="cb5-7" data-line-number="7"><span class="kw">ggplot</span>(d29, <span class="kw">aes</span>(<span class="dt">fill =</span> Edges, <span class="dt">x=</span>Shape , <span class="dt">y=</span>No_of_leaves)) <span class="op">+</span><span class="st"> </span><span class="kw">labs</span>(<span class="dt">y=</span><span class="st">&quot;Number of leaves&quot;</span>, <span class="dt">x=</span><span class="st">&quot;Shape of the leaf&quot;</span>) <span class="op">+</span><span class="st"> </span><span class="kw">geom_bar</span>(<span class="dt">stat =</span> <span class="st">&quot;identity&quot;</span>, <span class="dt">width =</span> <span class="fl">0.5</span>, <span class="dt">position =</span> <span class="kw">position_dodge</span>()) <span class="op">+</span><span class="st"> </span><span class="kw">coord_flip</span>() <span class="op">+</span><span class="st"> </span><span class="kw">ggtitle</span>(<span class="st">&quot;Composition of the sample by Shape Label and Edge type&quot;</span>) <span class="op">+</span><span class="st"> </span><span class="kw">scale_fill_brewer</span>(<span class="dt">palette =</span> <span class="st">&quot;Set1&quot;</span>) <span class="op">+</span><span class="st"> </span><span class="kw">coord_flip</span>() </a></code></pre></div>
+<p><img src="data:image/png;base64,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b948Q+TWU045xcyYMUNwhQG52PalDTT1f/bZZ9LGfGiLtkERyAcECloCAsAGDRqYSy+91Mfy9ddfN8OGDRPGVKdOHXPRRRf51/7880+zbNky89dff5kdd9zRVKpUyWzYsMH89ttvZrPNNjNLliwxO+20k5xft26d+eOPP8y2227r52dn/fr1IsW4dJxbs2aNqAArVqzg0Gy//faydX+rV6+WOt2xbhUBReBvBAqeAYVv5BFHHGHuvPNOUb222WYbc+utt5oHH3zQoK4NGjTI1KhRw2Bn+f33383o0aPNokWLzPDhw83GG29sKlSoYFauXGk6depkXnrpJWE2Rx55pOndu7dUc88995i33nrLEKxu1apV5pZbbjH169c33bt3N/vss4+BAfGjDf369ZM8MMPZs2cb7BT8tttuuyJNRoWcNm2af65t27amVq1a/rHuxEegSpUqcpF7p1SYCJQ5BsRt2H333YWxwIAcffjhh6Zz586mffv2cuqss84yqHDVq1c3CxYsMOPHjxfJ5cILLzRz5swxY8eOFWZEOhgQqhzSFSrfpptuaiZMmGCefPJJc8UVV0h5devWNUOGDBEJq0uXLqZv377mnXfeEUZI2RUrVjQDBgxwzfG33377rXnqqb+NqZw86KCDzG677SbXYYg/zPybkfkZYux8dFdHgw0MyS4ZkQ6KmjZKOtrJL0raqO2kPNIitSYj0ioVJgJlkgEh3aBSBenEE0807777rhkzZoz5+uuvRd0iHVSzZk1fbUI1q2uZCYS0gh0JNe3TTz81Bx98sDAfriEZnXHGGaZ///4cyjW2lOV5nqh12HyaNm0q0hXXmjdvLtIQ+45OOOEEw88R0hlSGBRW5Vya8Jb01apVk7aGr4WPYcq0j34lo6hlYvzfZJNNRCpMViajVai3yZgV9w9J02GRqFwdBUuETn5fK2gjdCxof/31VzN//nyxDQWvo5Y9/vjjpnbt2gYpZ++99/Yvh5lV5cqV5Vrwy4qkhP3HEfYhfk6icCNvXHf5UA1I4wibk5IioAj8g0CZYUCI6suXLxe7DExm3333/aeXdo/heFQwbCwwhi+++CKSeO8KOfzww82sWbN8yWHq1Klmjz328BmQSxfc7rfffpJn7dq1IkVNnz49eFn3FYFyj0DBf5IxCrds2VKkDkT2Aw44QEbBwne2a9euBiMydhsk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" /><!-- --></p>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>
