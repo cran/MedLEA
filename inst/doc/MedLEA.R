@@ -8,7 +8,9 @@ knitr::opts_chunk$set(
 library(MedLEA)
 
 ## ----example3, warning=FALSE, message=FALSE-----------------------------------
-library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
 library(wordcloud2)
 library(patchwork)
 library(tm)
@@ -33,7 +35,7 @@ p1
 #  ggplot(d11, aes(x= reorder(Arrangements_of_the_leaf, Percentage), y=Percentage)) + labs(y="Percentage", x="Arrangements of the leaf") + geom_bar(stat = "identity", width = 0.3) + ggtitle("Composition of sample by the Leaf Arrangement")+ geom_label(aes(label = paste0(Percentage, "%")), nudge_y = -6, size = 4, label.padding = unit(0.175,"lines")) + coord_flip()
 
 ## ----example2, warning=FALSE, message=FALSE-----------------------------------
-medlea <- filter(medlea, Arrangements == "Simple")
+medlea <- medlea %>% filter(Arrangements == "Simple")
 
 d11 <- as.data.frame(table(medlea$Shape))
 names(d11) <- c('Shape_of_the_leaf', 'No_of_leaves')

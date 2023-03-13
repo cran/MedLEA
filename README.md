@@ -3,8 +3,10 @@
 
 # MedLEA <img src="hexsticker/sticker.png" align="right" height="200"/>
 
-<!-- badges: start -->
+[![CRAN_Status_Badge](http://www.r-pkg.org/badges/version/MedLEA)](https://CRAN.R-project.org/package=MedLEA)
+[![Downloads](http://cranlogs.r-pkg.org/badges/MedLEA)](https://cran.r-project.org/package=MedLEA)
 
+<!-- badges: start -->
 <!-- badges: end -->
 
 The MedLEA package provides morphological and structural features of 471
@@ -12,6 +14,12 @@ medicinal plant leaves and 1099 leaf images of 31 species and 29-45
 images per species.
 
 ## Installation
+
+You could install the stable version on CRAN:
+
+``` r
+install.packages("MedLEA")
+```
 
 You can install the development version from
 [GitHub](https://github.com/) with:
@@ -35,10 +43,6 @@ devtools::install_github("SMART-Research/MedLEA")
 
 ``` r
 library(MedLEA)
-#> Loading required package: patchwork
-#> Loading required package: tm
-#> Loading required package: NLP
-#> Loading required package: wordcloud2
 data("medlea")
 head(medlea)
 #>   ID                                             Sinhala_Name   Family_Name
@@ -81,9 +85,11 @@ head(medlea)
 ## Wordcloud of Family of the Medicinal Plants
 
 ``` r
-library(tidyverse)
+library(ggplot2)
 library(wordcloud2)
+library(magrittr)
 library(patchwork)
+library(dplyr)
 library(tm)
 
 #unique(medlea$Family_Name)
